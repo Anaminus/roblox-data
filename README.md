@@ -116,6 +116,9 @@ contains a build system for a specific language. Each folder contains a README
 file, which you may consult for instructions on how to run the build system
 for that language.
 
+Note that generating data requires downloading many files from the ROBLOX
+website, each of which are megabytes in size.
+
 Currently, the only available language is Lua.
 
 
