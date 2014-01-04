@@ -93,16 +93,16 @@ each format, such as schematics.
 Examples:
 
 	Get header file in JSON:
-	https://raw.github.com/Anaminus/roblox-api/data/json/header.json
+	https://raw.github.com/Anaminus/roblox-api/master/data/json/header.json
 
 	Get API dump of first build in JSON:
-	https://raw.github.com/Anaminus/roblox-api/data/json/api/version-55bff205328042f4.json
+	https://raw.github.com/Anaminus/roblox-api/master/data/json/api/version-55bff205328042f4.json
 
 	Get ReflectionMetadata of latest build in JSON:
-	https://raw.github.com/Anaminus/roblox-api/data/json/rflmd/latest.json
+	https://raw.github.com/Anaminus/roblox-api/master/data/json/rflmd/latest.json
 
 	Get API dump of latest in raw format:
-	https://raw.github.com/Anaminus/roblox-api/data/raw/api/latest.rbxapi
+	https://raw.github.com/Anaminus/roblox-api/master/data/raw/api/latest.rbxapi
 
 
 ## Building
