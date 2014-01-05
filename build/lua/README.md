@@ -21,10 +21,11 @@ The simplest way to get everything set up is to download [LuaDist][luadist].
 	luadist install dkjson luafilesystem luasocket luaxml luazip
 	```
 
-3. Run the build script, where ever it is located.
+3. Run the build script, where ever it is located. Options to the build script
+   are directories to output the generated data to (the "top" directory).
 
 	```
-	lua build.lua
+	lua build.lua [DIR]...
 	```
 
 

@@ -1,3 +1,9 @@
+local outputs = {...}
+if #outputs == 0 then
+	print('Usage:\nlua build.lua [DIRECTORY]...\n')
+	error('Must specify one or more directories.',0)
+end
+
 local lfs = require 'lfs'
 local ParseVersions = require 'ParseVersions'
 local FetchAPI = require 'FetchAPI'
@@ -90,7 +96,7 @@ function format.raw.api(build,dir,rdir,latest)
 	return name
 end
 
-function format.raw.rflmd(build,dir,rdir,latest)
+function format.raw.rmd(build,dir,rdir,latest)
 	local name
 	if latest then
 		name = path(dir,'latest.xml')
@@ -205,7 +211,7 @@ function format.json.api(build,dir,rdir,latest)
 	return name
 end
 
-function format.json.rflmd(build,dir,rdir,latest)
+function format.json.rmd(build,dir,rdir,latest)
 	local name
 	if latest then
 		name = path(dir,'latest.json')
@@ -217,7 +223,7 @@ function format.json.rflmd(build,dir,rdir,latest)
 	print("Writing " .. name)
 
 	-- depend on raw format instead of build fetching
-	local rmdfile,err = format.raw.rflmd(build,rdir,rdir,latest)
+	local rmdfile,err = format.raw.rmd(build,rdir,rdir,latest)
 	if not rmdfile then return rmdfile,err end
 
 	require 'LuaXML'
@@ -315,63 +321,67 @@ function format.json.rflmd(build,dir,rdir,latest)
 
 	return name
 end
---[[
-]]
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-local data = path('../../data')
-local builds,err = ParseVersions(path('../../versions'))
-if not builds then error(err) end
-
-for ftype,dtypes in pairs(format) do
-	local fdir = path(data,ftype)
-	local s,err = mkdir(fdir)
-	if not s then return s,err end
-
-	if dtypes.header then
-		local s,err = dtypes.header(builds,fdir,path(data,'raw'))
-		if not s then
-			print('Could not write header file: ' .. err)
-		end
+for i = 1,#outputs do
+	local data = outputs[i]
+	if not exists(data) then
+		return nil,"directory `" .. data .. "` does not exist"
 	end
 
-	if dtypes.api then
-		local dir = path(fdir,'api')
-		local rdir = path(data,'raw','api')
-		local s,err = mkdir(dir)
+	local builds,err = ParseVersions(path('../../versions'))
+	if not builds then error(err) end
+
+	for ftype,dtypes in pairs(format) do
+		local fdir = path(data,ftype)
+		local s,err = mkdir(fdir)
 		if not s then return s,err end
 
-		local list = builds.List
-		for i = 1,#list do
-			local s,err = dtypes.api(list[i],dir,rdir)
+		if dtypes.header then
+			local s,err = dtypes.header(builds,fdir,path(data,'raw'))
+			if not s then
+				print('Could not write header file: ' .. err)
+			end
+		end
+
+		if dtypes.api then
+			local dir = path(fdir,'api')
+			local rdir = path(data,'raw','api')
+			local s,err = mkdir(dir)
+			if not s then return s,err end
+
+			local list = builds.List
+			for i = 1,#list do
+				local s,err = dtypes.api(list[i],dir,rdir)
+				if not s then
+					print('Could not write api file: ' .. err)
+				end
+			end
+			-- latest
+			local s,err = dtypes.api(list[#list],dir,rdir,true)
 			if not s then
 				print('Could not write api file: ' .. err)
 			end
 		end
-		-- latest
-		local s,err = dtypes.api(list[#list],dir,rdir,true)
-		if not s then
-			print('Could not write api file: ' .. err)
-		end
-	end
 
-	if dtypes.rflmd then
-		local dir = path(fdir,'rflmd')
-		local rdir = path(data,'raw','rflmd')
-		local s,err = mkdir(dir)
-		if not s then return s,err end
+		if dtypes.rmd then
+			local dir = path(fdir,'rmd')
+			local rdir = path(data,'raw','rmd')
+			local s,err = mkdir(dir)
+			if not s then return s,err end
 
-		local list = builds.List
-		for i = 1,#list do
-			local s,err = dtypes.rflmd(list[i],dir,rdir)
-			if not s then
-				print('Could not write rflmd file: ' .. err)
+			local list = builds.List
+			for i = 1,#list do
+				local s,err = dtypes.rmd(list[i],dir,rdir)
+				if not s then
+					print('Could not write rmd file: ' .. err)
+				end
 			end
-		end
-		local s,err = dtypes.rflmd(list[#list],dir,rdir,true)
-		if not s then
-			print('Could not write rflmd file: ' .. err)
+			local s,err = dtypes.rmd(list[#list],dir,rdir,true)
+			if not s then
+				print('Could not write rmd file: ' .. err)
+			end
 		end
 	end
 end
