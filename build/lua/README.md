@@ -17,11 +17,15 @@ The simplest way to get everything set up is to download [LuaDist][luadist].
 2. Ensure the necessary packages have been installed. Every required package
    can be installed in one call:
 
+	```
 	luadist install dkjson luafilesystem luasocket luaxml luazip
+	```
 
 3. Run the build script, where ever it is located.
 
+	```
 	lua build.lua
+	```
 
 
 [lua]: http://www.lua.org/
