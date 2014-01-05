@@ -1,7 +1,7 @@
-# ROBLOX API
+# ROBLOX Data
 
-This repository contains data about the [ROBLOX][roblox] client, as well as
-systems for generating data.
+This repository contains systems for generating data about the
+[ROBLOX][roblox] client.
 
 ## Contents
 
@@ -22,11 +22,6 @@ systems for generating data.
 	A folder that contains systems for generating data, in various languages.
 	Each subdirectory holds files for a single programming language.
 
-- `data`
-
-	A folder that contains the actual generated data. Each subdirectory
-	contains the same data, but in a specific format.
-
 - `info`
 
 	Contains information about each format, such as schematics.
@@ -36,11 +31,12 @@ systems for generating data.
 
 Generated data is available in multiple formats, which are contained in
 separate folders. However, the structure of each folder is very much the same.
-For the purposes of this section, the "root" folder will refer to the folder
-that contains a given format. Also note that while file names will be mostly
-the same, file extensions will depend on the format.
+For the purposes of this documentation, the "root" folder will refer to the
+folder that contains a given format. Also note that while file names will be
+mostly the same, file extensions will depend on the format.
 
 Generated data comes in 3 parts:
+
 - Lua API dumps
 - ReflectionMetadata files
 - A "header" file
@@ -52,16 +48,17 @@ file for a single Player build. The name of each file is the version hash of
 the build it was created from.
 
 ReflectionMetadata is a file used to specify metadata for parts of the Lua
-API. This data is contained under the `rflmd` folder, in the root folder.
+API. This data is contained under the `rmd` folder, in the root folder.
 Similar to the API dumps, this folder contains ReflectionMetadata files for
 each Player build, with the version hash used as the name.
 
 Each folder also has a file named `latest`, which contains data for the most
 recent build.
 
-The header file, located in the root folder, is named "header". It contains a
+The header file, located in the root folder, is named `header`. It contains a
 list of each Player build, as well as metadata related to each build. Such
-metadata includes
+metadata includes:
+
 - the version hash of the Player build
 - the version number of the Player build
 - when the build was created
@@ -71,14 +68,11 @@ The idea of the header file is to associate other information with a version
 hash, so that this information can be used to retrieve data.
 
 
-## Querying data
+## Formats
 
-You may query data by starting with the following URL:
-
-	https://raw.github.com/Anaminus/roblox-api/data/<format>/
-
-Where `<format>` indicates the format of the data you want to get. This is the
-"root" folder described in the previous section.
+Generated data is contained in a "top" directory, which contains each format.
+Each subdirectory is the "root" folder described in the previous section, for
+each format.
 
 Currently, 2 formats are supported:
 
@@ -93,31 +87,33 @@ each format, such as schematics.
 Examples:
 
 	Get header file in JSON:
-	https://raw.github.com/Anaminus/roblox-api/master/data/json/header.json
+	<top>/json/header.json
 
 	Get API dump of first build in JSON:
-	https://raw.github.com/Anaminus/roblox-api/master/data/json/api/version-55bff205328042f4.json
+	<top>/json/api/version-55bff205328042f4.json
 
 	Get ReflectionMetadata of latest build in JSON:
-	https://raw.github.com/Anaminus/roblox-api/master/data/json/rflmd/latest.json
+	<top>/json/rmd/latest.json
 
 	Get API dump of latest in raw format:
-	https://raw.github.com/Anaminus/roblox-api/master/data/raw/api/latest.rbxapi
+	<top>/raw/api/latest.rbxapi
 
 
-## Building
-
-This repository already contains generated data, which you are free to
-utilize. However, if you do not wish to rely on the data contained here, and
-would rather generate it yourself, you may do so.
+## Generating
 
 The `build` folder contains systems for generating the data. Each subdirectory
-contains a build system for a specific language. Each folder contains a README
-file, which you may consult for instructions on how to run the build system
-for that language.
+contains a build system for a specific language. Each of these contains a
+README file, which you may consult for instructions on how to run the build
+system for that language.
+
+Generally, generating data will require running a `build` file, which will
+involve supplying one or more "top" directories as options.
 
 Note that generating data requires downloading many files from the ROBLOX
-website, each of which are megabytes in size.
+website, each of which are megabytes in size. However, these files are cached
+in the temporary directory. Once a version is successfully downloaded, it will
+not need to be downloaded again, as long as the temporary copy exists. Also,
+since most of the data is static, most files will only be generated once.
 
 Currently, the only available language is Lua.
 
