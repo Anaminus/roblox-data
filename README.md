@@ -115,7 +115,9 @@ in the temporary directory. Once a version is successfully downloaded, it will
 not need to be downloaded again, as long as the temporary copy exists. Also,
 since most of the data is static, most files will only be generated once.
 
-Currently, the only available language is Lua.
+The following languages are available:
+
+- [Lua instructions](build/lua/README.md)
 
 
 [roblox]: http://corp.roblox.com/
