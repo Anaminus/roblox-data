@@ -40,11 +40,12 @@ local format = {}
 -- raw ---------------------------------------------------------
 format.raw = {}
 
-function format.raw.header(builds,dir)
-	local f,err = io.open(path(dir,'header.txt'),'wb')
+function format.raw.header(builds,dir,rdir)
+	local name = path(dir,'header.txt')
+	local f,err = io.open(name,'wb')
 	if not f then return f,err end
 
-	print("Writing raw/header.txt")
+	print("Writing " .. name)
 
 	f:write('schema ',builds.Schema,'\n')
 	f:write(builds.Domain,'\n')
@@ -62,16 +63,16 @@ function format.raw.header(builds,dir)
 	f:flush()
 	f:close()
 
-	return true
+	return name
 end
 
-function format.raw.api(build,dir,latest)
+function format.raw.api(build,dir,rdir,latest)
 	local name
 	if latest then
 		name = path(dir,'latest.rbxapi')
 	else
 		name = path(dir,build.PlayerHash .. '.rbxapi')
-		if not fileempty(name) then return true end
+		if not fileempty(name) then return name end
 	end
 
 	print("Writing " .. name)
@@ -86,16 +87,16 @@ function format.raw.api(build,dir,latest)
 	f:flush()
 	f:close()
 
-	return true
+	return name
 end
 
-function format.raw.rflmd(build,dir,latest)
+function format.raw.rflmd(build,dir,rdir,latest)
 	local name
 	if latest then
 		name = path(dir,'latest.xml')
 	else
 		name = path(dir,build.PlayerHash .. '.xml')
-		if not fileempty(name) then return true end
+		if not fileempty(name) then return name end
 	end
 
 	print("Writing " .. name)
@@ -113,8 +114,209 @@ function format.raw.rflmd(build,dir,latest)
 	f:flush()
 	f:close()
 
-	return true
+	return name
 end
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+-- json --------------------------------------------------------
+format.json = {}
+
+function format.json.header(builds,dir,rdir)
+	local name = path(dir,'header.json')
+	local f,err = io.open(name,'wb')
+	if not f then return f,err end
+
+	print("Writing " .. name)
+
+	local json = require 'dkjson'
+	f:write(json.encode(builds))
+
+	f:flush()
+	f:close()
+
+	return name
+end
+function format.json.api(build,dir,rdir,latest)
+	local name
+	if latest then
+		name = path(dir,'latest.json')
+	else
+		name = path(dir,build.PlayerHash .. '.json')
+		if not fileempty(name) then return name end
+	end
+
+	print("Writing " .. name)
+
+	-- depend on raw format instead of build fetching
+	local dumpfile,err = format.raw.api(build,rdir,rdir,latest)
+	if not dumpfile then return dumpfile,err end
+
+	local f,err = io.open(dumpfile,'rb')
+	if not f then return f,err end
+	local dump,err = LexAPI(f:read('*a'))
+	f:close()
+	if not dump then return dump,err end
+
+	local json = require 'dkjson'
+
+	for i = 1,#dump do
+		local item = dump[i]
+
+		-- convert `tags` to an array
+		local tags = item.tags
+		local t = setmetatable({},{__jsontype='array'})
+		for k in pairs(tags) do
+			t[#t+1] = k
+		end
+		table.sort(t)
+		item.tags = t
+
+		if item.type == 'Class' then
+			-- superclass is nullable
+			if item.Superclass == nil then
+				item.Superclass = json.null
+			end
+		elseif item.type == 'Function' or item.type == 'YieldFunction' then
+			local args = item.Arguments
+			for i = 1,#args do
+				-- default is nullable
+				if args[i].Default == nil then
+					args[i].Default = json.null
+				end
+			end
+		end
+		-- ensure argument tables are arrays
+		if item.Arguments ~= nil then
+			setmetatable(item.Arguments,{__jsontype='array'})
+		end
+	end
+
+	local f,err = io.open(name,'wb')
+	if not f then return f,err end
+
+	f:write(json.encode(dump))
+
+	f:flush()
+	f:close()
+
+	return name
+end
+
+function format.json.rflmd(build,dir,rdir,latest)
+	local name
+	if latest then
+		name = path(dir,'latest.json')
+	else
+		name = path(dir,build.PlayerHash .. '.json')
+		if not fileempty(name) then return name end
+	end
+
+	print("Writing " .. name)
+
+	-- depend on raw format instead of build fetching
+	local rmdfile,err = format.raw.rflmd(build,rdir,rdir,latest)
+	if not rmdfile then return rmdfile,err end
+
+	require 'LuaXML'
+	local rmd,err = xml.load(rmdfile)
+	if not rmd then return rmd,err end
+
+
+	local function getprop(props,name,default)
+		local prop = props:find(nil,'name',name)
+		if prop and prop.name == name then
+			if type(default) == 'number' then
+				return tonumber(prop[1]) or 0
+			elseif type(default) == 'bool' then
+				return prop[1] == 'true'
+			else
+				return prop[1]
+			end
+		else
+			return default
+		end
+	end
+
+	local out = {}
+	local classes = rmd[1]
+	for i = 1,#classes do
+		local tag = classes[i]
+		if tag[0] == 'Item' and tag.class == 'ReflectionMetadataClass' then
+			local props = tag:find('Properties')
+			if props then
+				local class = {
+					Name = getprop(props,'Name',"");
+					Browsable = getprop(props,'Browsable',true);
+					Preliminary = getprop(props,'Preliminary',false);
+					Deprecated = getprop(props,'Deprecated',false);
+					IsBackend = getprop(props,'IsBackend',false);
+					Summary = getprop(props,'summary',"");
+					ExplorerOrder = getprop(props,'ExplorerOrder',0);
+					ExplorerImageIndex = getprop(props,'ExplorerImageIndex',0);
+					PreferredParent = getprop(props,'PreferredParent',"");
+					Members = {};
+				}
+				local members = class.Members
+				for i = 1,#tag do
+					local subtag = tag[i]
+					if subtag[0] == 'Item' then
+						if subtag.class == 'ReflectionMetadataProperties'
+						or subtag.class == 'ReflectionMetadataFunctions'
+						or subtag.class == 'ReflectionMetadataYieldFunctions'
+						or subtag.class == 'ReflectionMetadataEvents'
+						or subtag.class == 'ReflectionMetadataCallbacks' then
+							for i = 1,#subtag do
+								local memtag = subtag[i]
+								if memtag[0] == 'Item' and memtag.class == 'ReflectionMetadataMember' then
+									local props = memtag:find('Properties')
+									if props then
+										local member = {
+											Name = getprop(props,'Name',"");
+											Browsable = getprop(props,'Browsable',true);
+											Preliminary = getprop(props,'Preliminary',false);
+											Deprecated = getprop(props,'Deprecated',false);
+											IsBackend = getprop(props,'IsBackend',false);
+											Summary = getprop(props,'summary',"");
+										}
+										members[#members+1] = member
+									end
+								end
+							end
+						end
+					end
+				end
+				out[#out+1] = class
+			end
+		end
+	end
+
+	local f,err = io.open(name,'wb')
+	if not f then return f,err end
+
+	local json = require 'dkjson'
+	f:write(json.encode(out,{keyorder={
+		'Name';
+		'Summary';
+		'ExplorerOrder';
+		'ExplorerImageIndex';
+		'Browsable';
+		'Deprecated';
+		'Preliminary';
+		'IsBackend';
+		'PreferredParent';
+		'Members';
+	}}))
+
+	f:flush()
+	f:close()
+
+	return name
+end
+--[[
+]]
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
@@ -128,7 +330,7 @@ for ftype,dtypes in pairs(format) do
 	if not s then return s,err end
 
 	if dtypes.header then
-		local s,err = dtypes.header(builds,fdir)
+		local s,err = dtypes.header(builds,fdir,path(data,'raw'))
 		if not s then
 			print('Could not write header file: ' .. err)
 		end
@@ -136,18 +338,19 @@ for ftype,dtypes in pairs(format) do
 
 	if dtypes.api then
 		local dir = path(fdir,'api')
+		local rdir = path(data,'raw','api')
 		local s,err = mkdir(dir)
 		if not s then return s,err end
 
 		local list = builds.List
 		for i = 1,#list do
-			local s,err = dtypes.api(list[i],dir)
+			local s,err = dtypes.api(list[i],dir,rdir)
 			if not s then
 				print('Could not write api file: ' .. err)
 			end
 		end
 		-- latest
-		local s,err = dtypes.api(list[#list],dir,true)
+		local s,err = dtypes.api(list[#list],dir,rdir,true)
 		if not s then
 			print('Could not write api file: ' .. err)
 		end
@@ -155,17 +358,18 @@ for ftype,dtypes in pairs(format) do
 
 	if dtypes.rflmd then
 		local dir = path(fdir,'rflmd')
+		local rdir = path(data,'raw','rflmd')
 		local s,err = mkdir(dir)
 		if not s then return s,err end
 
 		local list = builds.List
 		for i = 1,#list do
-			local s,err = dtypes.rflmd(list[i],dir)
+			local s,err = dtypes.rflmd(list[i],dir,rdir)
 			if not s then
 				print('Could not write rflmd file: ' .. err)
 			end
 		end
-		local s,err = dtypes.rflmd(list[#list],dir,true)
+		local s,err = dtypes.rflmd(list[#list],dir,rdir,true)
 		if not s then
 			print('Could not write rflmd file: ' .. err)
 		end
