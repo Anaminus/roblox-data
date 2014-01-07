@@ -3,7 +3,7 @@
 Notes about this doc:
 
 - `bool`, `int`, `string`, `null` indicate that a value is of the given type.
-- `...` indicates that an array may contain more of the previous values.
+- `...` indicates that an array may contain 0 or more of the previous values.
 - `|` indicates one value or the other is possible.
 
 ## Header
