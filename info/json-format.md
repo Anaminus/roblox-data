@@ -15,8 +15,8 @@ Notes about this doc:
 			{
 				"Date"          : int,
 				"PlayerHash"    : string,
-				"PlayerVersion" : string,
-				"StudioVersion" : [ int, int, int, int ]
+				"StudioHash"    : string,
+				"PlayerVersion" : [ int, int, int, int ]
 			},
 			...
 		]
