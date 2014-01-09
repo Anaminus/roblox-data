@@ -3,6 +3,9 @@
 This repository contains systems for generating data about the
 [ROBLOX][roblox] client.
 
+**This project is in beta. Do not use for any serious work unless you want it
+to break!**
+
 ## Contents
 
 - `README.md`
