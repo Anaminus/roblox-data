@@ -14,10 +14,8 @@ type Build struct {
 	Date          int
 	PlayerHash    string
 	StudioHash    string
-	PlayerVersion Version
+	PlayerVersion string
 }
-
-type Version [4]uint16
 
 ]]
 schema[1] = function(content,i)
@@ -33,16 +31,28 @@ schema[1] = function(content,i)
 		List = list;
 	}
 
+	local first = true
 	for line in content:sub(f+1):gmatch('[^\n]+') do
-		local date,phash,shash,v0,v1,v2,v3 = line:match('^(%d+)\t(version%-%x+)\t(version%-%x+)\t(%d+)%.(%d+)%.(%d+)%.(%d+)$')
-		date = tonumber(date)
-		if date then
-			list[#list+1] = {
-				Date = date;
-				PlayerHash = phash;
-				StudioHash = shash;
-				PlayerVersion = {tonumber(v0),tonumber(v1),tonumber(v2),tonumber(v3)};
-			}
+		if first then
+			first = false
+			local fields = {line:match('^(.+)\t(.+)\t(.+)\t(.+)$')}
+			if fields[1] ~= 'Date'
+			or fields[2] ~= 'PlayerHash'
+			or fields[3] ~= 'StudioHash'
+			or fields[4] ~= 'PlayerVersion' then
+				return nil,"invalid field name"
+			end
+		else
+			local date,phash,shash,pver = line:match('^(%d+)\t(version%-%x+)\t(version%-%x+)\t(%d+%.%d+%.%d+%.%d+)$')
+			date = tonumber(date)
+			if date then
+				list[#list+1] = {
+					Date = date;
+					PlayerHash = phash;
+					StudioHash = shash;
+					PlayerVersion = pver;
+				}
+			end
 		end
 	end
 
