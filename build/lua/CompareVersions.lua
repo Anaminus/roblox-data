@@ -47,7 +47,7 @@ return function(a,b)
 	for aref,abuild in pairs(as) do
 		if not bs[aref] then
 			-- remove
-			diffs[#diffs+1] {-1,abuild}
+			diffs[#diffs+1] = {-1,abuild}
 		end
 	end
 
