@@ -16,7 +16,7 @@ Notes about this doc:
 				"Date"          : int,
 				"PlayerHash"    : string,
 				"StudioHash"    : string,
-				"PlayerVersion" : [ int, int, int, int ]
+				"PlayerVersion" : string
 			},
 			...
 		]

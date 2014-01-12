@@ -5,6 +5,7 @@ if #outputs == 0 then
 end
 
 local lfs = require 'lfs'
+local CompareVersions = require 'CompareVersions'
 local ParseVersions = require 'ParseVersions'
 local FetchAPI = require 'FetchAPI'
 local LexAPI = require 'LexAPI'
@@ -23,13 +24,18 @@ local function exists(filename)
 	return not not lfs.attributes(filename)
 end
 
-local function fileempty(file)
-	if not exists(file) then return true end
-	local f = io.open(file,'rb')
-	if not f then return true end
-	local size = f:seek('end')
-	f:close()
-	return size == 0
+local function fileempty(filename)
+	local size = lfs.attributes(filename,'size')
+	return not size or size == 0
+end
+
+local function copy(an,bn)
+	local a = io.open(an,'rb')
+	local b = io.open(bn,'wb')
+	b:write(a:read('*a'))
+	b:flush()
+	a:close()
+	b:close()
 end
 
 local function mkdir(...)
@@ -40,50 +46,46 @@ local function mkdir(...)
 	return true
 end
 
-local format = {}
 
 ----------------------------------------------------------------
 -- raw ---------------------------------------------------------
-format.raw = {}
+local rawformat = {}
 
-function format.raw.header(builds,dir,rdir)
-	local name = path(dir,'header.txt')
-	local f,err = io.open(name,'wb')
-	if not f then return f,err end
-
-	print("Writing " .. name)
-
-	f:write('schema ',builds.Schema,'\n')
-	f:write(builds.Domain,'\n')
-	local list = builds.List
-	for i = 1,#list do
-		local b = list[i]
-		f:write(
-			b.Date,'\t',
-			b.PlayerHash,'\t',
-			b.StudioHash,'\t',
-			table.concat(b.PlayerVersion,'.'),'\n'
+-- Incrementally writes build information to a header file. If the build is
+-- nil, then it writes initial information to the file instead.
+function rawformat.header(header,versions,build)
+	if build then
+		header:write(
+			build.Date,'\t',
+			build.PlayerHash,'\t',
+			build.StudioHash,'\t',
+			build.PlayerVersion,'\n'
+		)
+	else
+		header:write(
+			'schema ',versions.Schema,'\n',
+			versions.Domain,'\n',
+			'Date\tPlayerHash\tStudioHash\tPlayerVersion\n'
 		)
 	end
-
-	f:flush()
-	f:close()
-
-	return name
+	header:flush()
+	return true
 end
 
-function format.raw.api(build,dir,rdir,latest)
+-- build info
+-- output directory
+-- whether to check if the file exists
+-- whether file is the `latest` file
+function rawformat.api(build,dir,check,latest)
 	local name
 	if latest then
-		name = path(dir,'latest.rbxapi')
+		name = path('raw','api','latest.txt')
 	else
-		name = path(dir,build.PlayerHash .. '.rbxapi')
-		if not fileempty(name) then return name end
+		name = path('raw','api',build.PlayerHash .. '.txt')
+		if check and not fileempty(path(dir,name)) then return name end
 	end
 
-	print("Writing " .. name)
-
-	local f,err = io.open(name,'wb')
+	local f,err = io.open(path(dir,name),'wb')
 	if not f then return f,err end
 
 	local dump,err = FetchAPI(build.PlayerHash,build.StudioHash)
@@ -93,21 +95,21 @@ function format.raw.api(build,dir,rdir,latest)
 	f:flush()
 	f:close()
 
+	print('\twrote `' .. name .. '`')
+
 	return name
 end
 
-function format.raw.rmd(build,dir,rdir,latest)
+function rawformat.rmd(build,dir,check,latest)
 	local name
 	if latest then
-		name = path(dir,'latest.xml')
+		name = path('raw','rmd','latest.xml')
 	else
-		name = path(dir,build.PlayerHash .. '.xml')
-		if not fileempty(name) then return name end
+		name = path('raw','rmd',build.PlayerHash .. '.xml')
+		if check and not fileempty(path(dir,name)) then return name end
 	end
 
-	print("Writing " .. name)
-
-	local f,err = io.open(name,'wb')
+	local f,err = io.open(path(dir,name),'wb')
 	if not f then return f,err end
 
 	local s,err,bdir = FetchAPI(build.PlayerHash,build.StudioHash)
@@ -120,47 +122,43 @@ function format.raw.rmd(build,dir,rdir,latest)
 	f:flush()
 	f:close()
 
+	print('\twrote `' .. name .. '`')
+
 	return name
 end
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
+-- Each entry to `format` is a table. This table should contain functions that
+-- format data for each type of data. Each function should accept two
+-- arguments: One, the path to an existing file, which contains the raw data
+-- to be converted, and two, the path of the file to output converted data to.
+-- Types of data are `header`, `api`, and `rmd`.
+local format = {}
 
 ----------------------------------------------------------------
 -- json --------------------------------------------------------
 format.json = {}
+format.json.extension = 'json'
 
-function format.json.header(builds,dir,rdir)
-	local name = path(dir,'header.json')
-	local f,err = io.open(name,'wb')
+function format.json.header(raw,dest)
+	local header,err = ParseVersions(raw)
+	if not header then return header,err end
+
+	local f,err = io.open(dest,'wb')
 	if not f then return f,err end
 
-	print("Writing " .. name)
-
 	local json = require 'dkjson'
-	f:write(json.encode(builds))
+	f:write(json.encode(header))
 
 	f:flush()
 	f:close()
 
-	return name
+	return true
 end
-function format.json.api(build,dir,rdir,latest)
-	local name
-	if latest then
-		name = path(dir,'latest.json')
-	else
-		name = path(dir,build.PlayerHash .. '.json')
-		if not fileempty(name) then return name end
-	end
 
-	print("Writing " .. name)
-
-	-- depend on raw format instead of build fetching
-	local dumpfile,err = format.raw.api(build,rdir,rdir,latest)
-	if not dumpfile then return dumpfile,err end
-
-	local f,err = io.open(dumpfile,'rb')
+function format.json.api(raw,dest)
+	local f,err = io.open(raw,'rb')
 	if not f then return f,err end
 	local dump,err = LexAPI(f:read('*a'))
 	f:close()
@@ -200,7 +198,7 @@ function format.json.api(build,dir,rdir,latest)
 		end
 	end
 
-	local f,err = io.open(name,'wb')
+	local f,err = io.open(dest,'wb')
 	if not f then return f,err end
 
 	f:write(json.encode(dump))
@@ -208,28 +206,13 @@ function format.json.api(build,dir,rdir,latest)
 	f:flush()
 	f:close()
 
-	return name
+	return true
 end
 
-function format.json.rmd(build,dir,rdir,latest)
-	local name
-	if latest then
-		name = path(dir,'latest.json')
-	else
-		name = path(dir,build.PlayerHash .. '.json')
-		if not fileempty(name) then return name end
-	end
-
-	print("Writing " .. name)
-
-	-- depend on raw format instead of build fetching
-	local rmdfile,err = format.raw.rmd(build,rdir,rdir,latest)
-	if not rmdfile then return rmdfile,err end
-
+function format.json.rmd(raw,dest)
 	require 'LuaXML'
-	local rmd,err = xml.load(rmdfile)
+	local rmd,err = xml.load(raw)
 	if not rmd then return rmd,err end
-
 
 	local function getprop(props,name,default)
 		local prop = props:find(nil,'name',name)
@@ -254,15 +237,15 @@ function format.json.rmd(build,dir,rdir,latest)
 			local props = tag:find('Properties')
 			if props then
 				local class = {
-					Name = getprop(props,'Name',"");
+					Name = getprop(props,'Name','');
 					Browsable = getprop(props,'Browsable',true);
 					Preliminary = getprop(props,'Preliminary',false);
 					Deprecated = getprop(props,'Deprecated',false);
 					IsBackend = getprop(props,'IsBackend',false);
-					Summary = getprop(props,'summary',"");
+					Summary = getprop(props,'summary','');
 					ExplorerOrder = getprop(props,'ExplorerOrder',0);
 					ExplorerImageIndex = getprop(props,'ExplorerImageIndex',0);
-					PreferredParent = getprop(props,'PreferredParent',"");
+					PreferredParent = getprop(props,'PreferredParent','');
 					Members = {};
 				}
 				local members = class.Members
@@ -280,12 +263,12 @@ function format.json.rmd(build,dir,rdir,latest)
 									local props = memtag:find('Properties')
 									if props then
 										local member = {
-											Name = getprop(props,'Name',"");
+											Name = getprop(props,'Name','');
 											Browsable = getprop(props,'Browsable',true);
 											Preliminary = getprop(props,'Preliminary',false);
 											Deprecated = getprop(props,'Deprecated',false);
 											IsBackend = getprop(props,'IsBackend',false);
-											Summary = getprop(props,'summary',"");
+											Summary = getprop(props,'summary','');
 										}
 										members[#members+1] = member
 									end
@@ -299,7 +282,7 @@ function format.json.rmd(build,dir,rdir,latest)
 		end
 	end
 
-	local f,err = io.open(name,'wb')
+	local f,err = io.open(dest,'wb')
 	if not f then return f,err end
 
 	local json = require 'dkjson'
@@ -319,69 +302,145 @@ function format.json.rmd(build,dir,rdir,latest)
 	f:flush()
 	f:close()
 
-	return name
+	return true
 end
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-for i = 1,#outputs do
-	local data = outputs[i]
-	if not exists(data) then
-		return nil,"directory `" .. data .. "` does not exist"
+local function updateDataType(build,dtype,data,check,latest)
+	local rawfile,err = rawformat[dtype](build,data,check,latest)
+	if rawfile then
+		for ftype,f in pairs(format) do
+			local out
+			if latest then
+				out = path(ftype,dtype,'latest.' .. f.extension)
+			else
+				out = path(ftype,dtype,build.PlayerHash .. '.' .. f.extension)
+			end
+			if check and not fileempty(path(data,out)) then
+				-- do not update file if it exists
+				return
+			end
+			local s,err = f[dtype](path(data,rawfile),path(data,out))
+			if s then
+				print('\twrote `' .. out .. '`')
+			else
+				print('\tcould not write ' .. dtype .. ' file for ' .. ftype .. 'format: ' .. err)
+			end
+		end
+	else
+		print('\tcould not write raw ' .. dtype .. ' file: ' .. err)
 	end
+end
 
-	local builds,err = ParseVersions(path('../../versions'))
-	if not builds then error(err) end
+local function makedatadir(data,type)
+	local dir = path(data,type)
+	local s,err = mkdir(dir)
+	if not s then return s,err end
 
-	for ftype,dtypes in pairs(format) do
-		local fdir = path(data,ftype)
-		local s,err = mkdir(fdir)
-		if not s then return s,err end
+	local s,err = mkdir(path(dir,'api'))
+	if not s then return s, "`api` dir: " .. err end
 
-		if dtypes.header then
-			local s,err = dtypes.header(builds,fdir,path(data,'raw'))
-			if not s then
-				print('Could not write header file: ' .. err)
+	local s,err = mkdir(path(dir,'rmd'))
+	if not s then return s, "`rmd` dir: " .. err end
+
+	return dir
+end
+
+local versions,err = ParseVersions(path('../../versions'))
+if not versions then error("could not parse versions file: " .. err) end
+
+function buildEach()
+	for i = 1,#outputs do
+		local data = outputs[i]
+		if not exists(data) then
+			return nil,'directory `' .. data .. '` does not exist'
+		end
+
+		print('writing `' .. data .. '`')
+
+		-- create directories
+		local rawdir,err = makedatadir(data,'raw')
+		if not rawdir then return rawdir,'could not create raw directory: ' .. err end
+
+		for type,f in pairs(format) do
+			local s,err = makedatadir(data,type)
+			if not s then return s,'could not create directory for ' .. type .. ' format: ' .. err end
+		end
+
+		-- compare versions with current header
+		local headerpath = path(data,'raw','header.txt')
+		local updates do
+			local header
+			if exists(headerpath) then
+				header,err = ParseVersions(headerpath)
+				if err then
+					print('could not parse header file: ' .. err)
+					print('assuming empty header')
+				end
+			end
+			if not header then
+				header = {Schema=versions.Schema,Domain=versions.Domain,List={}}
+			end
+			updates = CompareVersions(header,versions)
+		end
+
+		-- start writing new raw header file
+		local header,err = io.open(path(rawdir,'header.txt'),'wb')
+		if not header then
+			return nil,'could not open header file: ' .. err
+		end
+		rawformat.header(header,versions,nil)
+
+		local date = 0
+		local latest
+		for i = 1,#updates do
+			local state,build = updates[i][1],updates[i][2]
+			if state == 0 or state == 1 then
+				print((state==0 and 'verifying ' or 'updating ') .. build.PlayerHash)
+
+				if build.Date > date then
+					date = build.Date
+					latest = build
+				end
+
+				updateDataType(build,'api',data,state==0)
+				updateDataType(build,'rmd',data,state==0)
+
+				rawformat.header(header,versions,build)
+			elseif state == -1 then
+				print('removing ' .. build.PlayerHash)
+
+				os.remove(path(data,'raw','api',build.PlayerHash .. '.txt'))
+				os.remove(path(data,'raw','rmd',build.PlayerHash .. '.xml'))
+
+				for type,f in pairs(format) do
+					os.remove(path(data,type,'api',build.PlayerHash .. '.' .. f.extension))
+					os.remove(path(data,type,'rmd',build.PlayerHash .. '.' .. f.extension))
+				end
+			end
+		end
+		header:flush()
+		header:close()
+		print('updated raw header file')
+
+		print('updating formatted header files')
+		for type,f in pairs(format) do
+			local s,err = f.header(headerpath,path(data,type,'header.' .. (f.extension or type)))
+			if s then
+				print('\twrote header for ' .. type .. ' format')
+			else
+				print('\tcould not write header for ' .. type .. ' format: ' .. err)
 			end
 		end
 
-		if dtypes.api then
-			local dir = path(fdir,'api')
-			local rdir = path(data,'raw','api')
-			local s,err = mkdir(dir)
-			if not s then return s,err end
-
-			local list = builds.List
-			for i = 1,#list do
-				local s,err = dtypes.api(list[i],dir,rdir)
-				if not s then
-					print('Could not write api file: ' .. err)
-				end
-			end
-			-- latest
-			local s,err = dtypes.api(list[#list],dir,rdir,true)
-			if not s then
-				print('Could not write api file: ' .. err)
-			end
-		end
-
-		if dtypes.rmd then
-			local dir = path(fdir,'rmd')
-			local rdir = path(data,'raw','rmd')
-			local s,err = mkdir(dir)
-			if not s then return s,err end
-
-			local list = builds.List
-			for i = 1,#list do
-				local s,err = dtypes.rmd(list[i],dir,rdir)
-				if not s then
-					print('Could not write rmd file: ' .. err)
-				end
-			end
-			local s,err = dtypes.rmd(list[#list],dir,rdir,true)
-			if not s then
-				print('Could not write rmd file: ' .. err)
-			end
+		if latest then
+			print('updating latest files')
+			updateDataType(latest,'api',data,false,true)
+			updateDataType(latest,'rmd',data,false,true)
 		end
 	end
 end
+
+local s,err = buildEach()
+if not s then error(err,0) end
