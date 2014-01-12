@@ -99,7 +99,7 @@ Examples:
 	<top>/json/rmd/latest.json
 
 	Get API dump of latest in raw format:
-	<top>/raw/api/latest.rbxapi
+	<top>/raw/api/latest.txt
 
 
 ## Generating
