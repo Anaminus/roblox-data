@@ -1,7 +1,30 @@
-local outputs = {...}
-if #outputs == 0 then
-	print('Usage:\nlua build.lua [DIRECTORY]...\n')
-	error('Must specify one or more directories.',0)
+local args = {...}
+if #args == 0 then
+	print('Usage:')
+	print('\tbuild.lua [[-f format] ...] directory ...\n')
+	print('\t-f format\tSpecifies a data format to output to. May be specified multiple times.')
+	print('\tdirectory\tOne or more directories to output to.')
+	return
+end
+
+local directories,formats={},{} do
+	local i = 1
+	local n = #args
+	while i <= n do
+		if args[i] == '-f' then
+			if args[i+1] then
+				i = i + 1
+				formats[args[i]] = true
+				print("FORMAT",args[i])
+			else
+				error('-f must specify a format',0)
+			end
+		else
+			print("DIR",args[i])
+			directories[#directories+1] = args[i]
+		end
+		i = i + 1
+	end
 end
 
 local lfs = require 'lfs'
@@ -311,21 +334,23 @@ local function updateDataType(build,dtype,data,check,latest)
 	local rawfile,err = rawformat[dtype](build,data,check,latest)
 	if rawfile then
 		for ftype,f in pairs(format) do
-			local out
-			if latest then
-				out = path(ftype,dtype,'latest.' .. f.extension)
-			else
-				out = path(ftype,dtype,build.PlayerHash .. '.' .. f.extension)
-			end
-			if check and not fileempty(path(data,out)) then
-				-- do not update file if it exists
-				return
-			end
-			local s,err = f[dtype](path(data,rawfile),path(data,out))
-			if s then
-				print('\twrote `' .. out .. '`')
-			else
-				print('\tcould not write ' .. dtype .. ' file for ' .. ftype .. 'format: ' .. err)
+			if formats[ftype] then
+				local out
+				if latest then
+					out = path(ftype,dtype,'latest.' .. f.extension)
+				else
+					out = path(ftype,dtype,build.PlayerHash .. '.' .. f.extension)
+				end
+				if check and not fileempty(path(data,out)) then
+					-- do not update file if it exists
+					return
+				end
+				local s,err = f[dtype](path(data,rawfile),path(data,out))
+				if s then
+					print('\twrote `' .. out .. '`')
+				else
+					print('\tcould not write ' .. dtype .. ' file for ' .. ftype .. 'format: ' .. err)
+				end
 			end
 		end
 	else
@@ -351,8 +376,8 @@ local versions,err = ParseVersions(path('../../versions'))
 if not versions then error("could not parse versions file: " .. err) end
 
 function buildEach()
-	for i = 1,#outputs do
-		local data = outputs[i]
+	for i = 1,#directories do
+		local data = directories[i]
 		if not exists(data) then
 			return nil,'directory `' .. data .. '` does not exist'
 		end
@@ -364,8 +389,10 @@ function buildEach()
 		if not rawdir then return rawdir,'could not create raw directory: ' .. err end
 
 		for type,f in pairs(format) do
-			local s,err = makedatadir(data,type)
-			if not s then return s,'could not create directory for ' .. type .. ' format: ' .. err end
+			if formats[type] then
+				local s,err = makedatadir(data,type)
+				if not s then return s,'could not create directory for ' .. type .. ' format: ' .. err end
+			end
 		end
 
 		-- compare versions with current header
@@ -415,8 +442,10 @@ function buildEach()
 				os.remove(path(data,'raw','rmd',build.PlayerHash .. '.xml'))
 
 				for type,f in pairs(format) do
-					os.remove(path(data,type,'api',build.PlayerHash .. '.' .. f.extension))
-					os.remove(path(data,type,'rmd',build.PlayerHash .. '.' .. f.extension))
+					if formats[type] then
+						os.remove(path(data,type,'api',build.PlayerHash .. '.' .. f.extension))
+						os.remove(path(data,type,'rmd',build.PlayerHash .. '.' .. f.extension))
+					end
 				end
 			end
 		end
@@ -426,11 +455,13 @@ function buildEach()
 
 		print('updating formatted header files')
 		for type,f in pairs(format) do
-			local s,err = f.header(headerpath,path(data,type,'header.' .. (f.extension or type)))
-			if s then
-				print('\twrote header for ' .. type .. ' format')
-			else
-				print('\tcould not write header for ' .. type .. ' format: ' .. err)
+			if formats[type] then
+				local s,err = f.header(headerpath,path(data,type,'header.' .. (f.extension or type)))
+				if s then
+					print('\twrote header for ' .. type .. ' format')
+				else
+					print('\tcould not write header for ' .. type .. ' format: ' .. err)
+				end
 			end
 		end
 

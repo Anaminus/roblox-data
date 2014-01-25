@@ -21,7 +21,16 @@ For example, the Lua build system makes use of options to allow directories to
 be supplied.
 
 ```
-lua build.lua <dir1> <dir2> <etc>
+build.lua <dir1> <dir2> <etc>
+```
+
+The build system should output raw data to the specified directories. It
+should also be possible to specify an alternate format to output to.
+
+For example, the Lua build system uses the `-f` option.
+
+```
+build.lua -f json <directory>
 ```
 
 ## Versions file
