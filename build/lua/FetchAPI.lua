@@ -219,6 +219,9 @@ local function unzip(url,dir)
 		end
 	end
 	zipfile:close()
+
+	os.remove(ztmp)
+
 	return true
 end
 
