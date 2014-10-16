@@ -277,6 +277,16 @@ return function(verPlayer,verStudio)
 			return s,"Could not create content directory: " .. err
 		end
 
+		-- textures directory required by the exe
+		mkdir(path(dirPlayer,'PlatformContent'))
+		if not s then
+			return s,"Could not create PlatformContent directory: " .. err
+		end
+		mkdir(path(dirPlayer,'PlatformContent','pc'))
+		if not s then
+			return s,"Could not create pc directory: " .. err
+		end
+
 		local zips = {
 			{setupURL .. verPlayer .. '-RobloxApp.zip',dirPlayer};
 			{setupURL .. verPlayer .. '-Libraries.zip',dirPlayer};
