@@ -252,9 +252,13 @@ return function(data)
 		local tags = {}
 		local s = i
 		local depth = 0
+		local stack = 0
 		while not is'\n' and not is'\r\n' do
 			if is'[' then
 				depth = depth + 1
+				if stack < depth then
+					stack = depth
+				end
 				i = i + 1
 				if depth == 1 then
 					s = i
@@ -263,7 +267,14 @@ return function(data)
 				depth = depth - 1
 				lnassert(depth >= 0,"unexpected tag closer",4)
 				if depth == 0 then
-					tags[data:sub(s,i-1)] = true
+					local tag = data:sub(s,i-1)
+					if stack == 2 then
+						local contextTag,newTag = tag:match("([a-zA-Z0-9_]+):%s%[(.+)%]")
+						tags[contextTag] = true
+						tags[newTag] = true
+					else
+						tags[tag] = true
+					end
 				end
 				i = i + 1
 				white()
